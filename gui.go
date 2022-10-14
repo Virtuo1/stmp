@@ -65,7 +65,7 @@ func handlePlaylistSelected(playlist SubsonicPlaylist, ui *Ui) {
 
 		title = entity.getSongTitle()
 		handler = makeSongHandler(ui.connection.GetPlayUrl(&entity),
-			title, entity.Artist, entity.Duration, ui.player, ui.selectedPlaylist)
+			title, entity.Artist, entity.Duration, ui.player, ui.queueList)
 
 		ui.selectedPlaylist.AddItem(title, "", 0, handler)
 	}
@@ -162,7 +162,9 @@ func handleAddSongToPlaylist(ui *Ui, playlist *SubsonicPlaylist) {
 	if !entity.IsDirectory {
 		ui.connection.AddSongToPlaylist(playlist.Id, entity.Id)
 	}
-	//TODO update the playlists
+	// update the playlists
+	response, _ := ui.connection.GetPlaylists()
+	ui.playlists = response.Playlists.Playlists
 }
 
 func addDirectoryToQueue(entity *SubsonicEntity, ui *Ui) {
