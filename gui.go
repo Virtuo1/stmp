@@ -12,20 +12,21 @@ import (
 
 // struct contains all the updatable elements of the Ui
 type Ui struct {
-	app              *tview.Application
-	pages            *tview.Pages
-	entityList       *tview.List
-	queueList        *tview.List
-	playlistList     *tview.List
-	selectedPlaylist *tview.List
-	newPlaylistInput *tview.InputField
-	startStopStatus  *tview.TextView
-	playerStatus     *tview.TextView
-	currentDirectory *SubsonicDirectory
-	artistIdList     []string
-	playlists        []SubsonicPlaylist
-	connection       *SubsonicConnection
-	player           *Player
+	app               *tview.Application
+	pages             *tview.Pages
+	entityList        *tview.List
+	queueList         *tview.List
+	playlistList      *tview.List
+	addToPlaylistList *tview.List
+	selectedPlaylist  *tview.List
+	newPlaylistInput  *tview.InputField
+	startStopStatus   *tview.TextView
+	playerStatus      *tview.TextView
+	currentDirectory  *SubsonicDirectory
+	artistIdList      []string
+	playlists         []SubsonicPlaylist
+	connection        *SubsonicConnection
+	player            *Player
 }
 
 func handleEntitySelected(directoryId string, ui *Ui) {
@@ -165,6 +166,14 @@ func handleAddSongToPlaylist(ui *Ui, playlist *SubsonicPlaylist) {
 	// update the playlists
 	response, _ := ui.connection.GetPlaylists()
 	ui.playlists = response.Playlists.Playlists
+
+	ui.playlistList.Clear()
+	ui.addToPlaylistList.Clear()
+
+	for _, playlist := range ui.playlists {
+		ui.playlistList.AddItem(playlist.Name, "", 0, nil)
+		ui.addToPlaylistList.AddItem(playlist.Name, "", 0, nil)
+	}
 }
 
 func addDirectoryToQueue(entity *SubsonicEntity, ui *Ui) {
@@ -201,8 +210,10 @@ func addSongToQueue(entity *SubsonicEntity, ui *Ui) {
 func newPlaylist(name string, ui *Ui) {
 	response, _ := ui.connection.CreatePlaylist(name)
 
-	ui.playlistList.AddItem(response.Playlist.Name, "", 0, nil)
 	ui.playlists = append(ui.playlists, response.Playlist)
+
+	ui.playlistList.AddItem(response.Playlist.Name, "", 0, nil)
+	ui.addToPlaylistList.AddItem(response.Playlist.Name, "", 0, nil)
 }
 
 func makeSongHandler(uri string, title string, artist string, duration int, player *Player,
@@ -230,6 +241,9 @@ func createUi(indexes *[]SubsonicIndex, playlists *[]SubsonicPlaylist, connectio
 	// list of playlists
 	playlistList := tview.NewList().ShowSecondaryText(false).
 		SetSelectedFocusOnly(true)
+	// same as 'playlistList' except for the addToPlaylistModal
+	// - we need a specific version of this because we need different keybinds
+	addToPlaylistList := tview.NewList().ShowSecondaryText(false)
 	// songs in the selected playlist
 	selectedPlaylist := tview.NewList().ShowSecondaryText(false)
 	// status text at the top
@@ -252,6 +266,7 @@ func createUi(indexes *[]SubsonicIndex, playlists *[]SubsonicPlaylist, connectio
 		entityList,
 		queueList,
 		playlistList,
+		addToPlaylistList,
 		selectedPlaylist,
 		newPlaylistInput,
 		startStopStatus,
@@ -302,25 +317,25 @@ func createBrowserPage(ui *Ui, titleFlex *tview.Flex, indexes *[]SubsonicIndex) 
 		handleEntitySelected(ui.artistIdList[index], ui)
 	})
 
-	// we need a specific version of this because we need different keybinds
-	playlistList := tview.NewList().ShowSecondaryText(false)
 	for _, playlist := range ui.playlists {
-		playlistList.AddItem(playlist.Name, "", 0, nil)
+		ui.addToPlaylistList.AddItem(playlist.Name, "", 0, nil)
 	}
+	ui.addToPlaylistList.SetBorder(true).
+		SetTitle("Add to Playlist")
 
 	addToPlaylistFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(playlistList, 0, 1, true)
+		AddItem(ui.addToPlaylistList, 0, 1, true)
 
 	addToPlaylistModal := makeModal(addToPlaylistFlex, 60, 20)
 
-	playlistList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	ui.addToPlaylistList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape {
 			ui.pages.HidePage("addToPlaylist")
 			ui.pages.SwitchToPage("browser")
 			ui.app.SetFocus(ui.entityList)
 		} else if event.Key() == tcell.KeyEnter {
-			playlist := ui.playlists[playlistList.GetCurrentItem()]
+			playlist := ui.playlists[ui.addToPlaylistList.GetCurrentItem()]
 			handleAddSongToPlaylist(ui, &playlist)
 
 			ui.pages.HidePage("addToPlaylist")
@@ -342,7 +357,7 @@ func createBrowserPage(ui *Ui, titleFlex *tview.Flex, indexes *[]SubsonicIndex) 
 		// only makes sense to add to a playlist if there are playlists
 		if event.Rune() == 'A' && ui.playlistList.GetItemCount() > 0 {
 			ui.pages.ShowPage("addToPlaylist")
-			ui.app.SetFocus(playlistList)
+			ui.app.SetFocus(ui.addToPlaylistList)
 			return nil
 		}
 		return event
