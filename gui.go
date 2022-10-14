@@ -524,6 +524,15 @@ func InitGui(indexes *[]SubsonicIndex, playlists *[]SubsonicPlaylist, connection
 			return nil
 		}
 
+		if event.Rune() == '.' {
+			ui.player.Seek(10)
+			return nil
+		}
+		if event.Rune() == ',' {
+			ui.player.Seek(-10)
+			return nil
+		}
+
 		return event
 	})
 

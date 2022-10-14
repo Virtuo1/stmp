@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strconv"
+
 	"github.com/yourok/go-mpv/mpv"
 )
 
@@ -115,4 +117,8 @@ func (p *Player) AdjustVolume(increment int64) {
 	}
 
 	p.Instance.SetProperty("volume", mpv.FORMAT_INT64, nevVolume)
+}
+
+func (p *Player) Seek(increment int) {
+	p.Instance.Command([]string{"seek", strconv.Itoa(increment)})
 }
