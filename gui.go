@@ -216,6 +216,25 @@ func newPlaylist(name string, ui *Ui) {
 	ui.addToPlaylistList.AddItem(response.Playlist.Name, "", 0, nil)
 }
 
+func deletePlaylist(index int, ui *Ui) {
+	if index == -1 || len(ui.playlists) < index {
+		return
+	}
+
+	playlist := ui.playlists[index]
+
+	if index == 0 {
+		ui.playlistList.SetCurrentItem(1)
+	}
+
+	// Removes item with specified index
+	ui.playlists = append(ui.playlists[:index], ui.playlists[index+1:]...)
+
+	ui.playlistList.RemoveItem(index)
+	ui.addToPlaylistList.RemoveItem(index)
+	ui.connection.DeletePlaylist(playlist.Id)
+}
+
 func makeSongHandler(uri string, title string, artist string, duration int, player *Player,
 	queueList *tview.List) func() {
 	return func() {
@@ -383,7 +402,7 @@ func createQueuePage(ui *Ui, titleFlex *tview.Flex) *tview.Flex {
 	return queueFlex
 }
 
-func createPlaylistPage(ui *Ui, titleFlex *tview.Flex) *tview.Flex {
+func createPlaylistPage(ui *Ui, titleFlex *tview.Flex) (*tview.Flex, tview.Primitive) {
 	//add the playlists
 	for _, playlist := range ui.playlists {
 		ui.playlistList.AddItem(playlist.Name, "", 0, nil)
@@ -433,6 +452,9 @@ func createPlaylistPage(ui *Ui, titleFlex *tview.Flex) *tview.Flex {
 			playlistFlex.AddItem(ui.newPlaylistInput, 0, 1, true)
 			ui.app.SetFocus(ui.newPlaylistInput)
 		}
+		if event.Rune() == 'd' {
+			ui.pages.ShowPage("deletePlaylist")
+		}
 		return event
 	})
 
@@ -448,7 +470,36 @@ func createPlaylistPage(ui *Ui, titleFlex *tview.Flex) *tview.Flex {
 		return event
 	})
 
-	return playlistFlex
+	deletePlaylistList := tview.NewList().
+		ShowSecondaryText(false)
+
+	deletePlaylistList.AddItem("Confirm", "", 0, nil)
+
+	deletePlaylistList.SetBorder(true).
+		SetTitle("Confirm deletion")
+
+	deletePlaylistFlex := tview.NewFlex().
+		SetDirection(tview.FlexColumn).
+		AddItem(deletePlaylistList, 0, 1, true)
+
+	deletePlaylistList.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEnter {
+			deletePlaylist(ui.playlistList.GetCurrentItem(), ui)
+			ui.app.SetFocus(ui.playlistList)
+			ui.pages.HidePage("deletePlaylist")
+			return nil
+		}
+		if event.Key() == tcell.KeyEscape {
+			ui.app.SetFocus(ui.playlistList)
+			ui.pages.HidePage("deletePlaylist")
+			return nil
+		}
+		return event
+	})
+
+	deletePlaylistModal := makeModal(deletePlaylistFlex, 20, 3)
+
+	return playlistFlex, deletePlaylistModal
 }
 
 func InitGui(indexes *[]SubsonicIndex, playlists *[]SubsonicPlaylist, connection *SubsonicConnection) *Ui {
@@ -463,7 +514,7 @@ func InitGui(indexes *[]SubsonicIndex, playlists *[]SubsonicPlaylist, connection
 
 	browserFlex, addToPlaylistModal := createBrowserPage(ui, titleFlex, indexes)
 	queueFlex := createQueuePage(ui, titleFlex)
-	playlistFlex := createPlaylistPage(ui, titleFlex)
+	playlistFlex, deletePlaylistModal := createPlaylistPage(ui, titleFlex)
 
 	// handle
 	go handleMpvEvents(ui)
@@ -471,7 +522,8 @@ func InitGui(indexes *[]SubsonicIndex, playlists *[]SubsonicPlaylist, connection
 	ui.pages.AddPage("browser", browserFlex, true, true).
 		AddPage("queue", queueFlex, true, false).
 		AddPage("playlists", playlistFlex, true, false).
-		AddPage("addToPlaylist", addToPlaylistModal, true, false)
+		AddPage("addToPlaylist", addToPlaylistModal, true, false).
+		AddPage("deletePlaylist", deletePlaylistModal, true, false)
 
 	ui.pages.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// we don't want any of these firing if we're trying to add a new playlist
